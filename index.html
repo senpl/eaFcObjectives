@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>FUT.GG Objectives – SP Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f4f4f4; }
+        tr.completed { background: #e6ffe6; text-decoration: line-through; }
+    </style>
+</head>
+<body>
+
+<h1>FUT.GG Objectives – SP Tracker</h1>
+<button onclick="loadObjectives()">Załaduj cele</button>
+<button onclick="clearAll()">Clear All Checkboxes</button>
+
+<table id="objectivesTable">
+    <thead>
+        <tr>
+            <th>Ukończone</th>
+            <th>Tytuł</th>
+            <th>Opis</th>
+            <th>Season Points</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+const STORAGE_KEY = "futGgCompleted";
+
+/** Pobranie ukończonych */
+function getCompleted() {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+}
+
+/** Zapis ukończonych */
+function setCompleted(val) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
+}
+
+/** Toggle checkbox */
+function toggleCompleted(id) {
+    const arr = getCompleted();
+    const index = arr.indexOf(id);
+    if (index >= 0) arr.splice(index, 1);
+    else arr.push(id);
+    setCompleted(arr);
+    render(objectives);
+}
+
+/* clear all entries in storage */
+function clearAll() {
+    localStorage.removeItem(STORAGE_KEY);
+    render(window._objectives);
+}
+
+/** Render tabeli */
+function render(objectives) {
+    const tbody = document.querySelector("#objectivesTable tbody");
+    tbody.innerHTML = "";
+    const completed = getCompleted();
+
+    objectives.forEach(obj => {
+        const tr = document.createElement("tr");
+        if (completed.includes(obj.id)) tr.classList.add("completed");
+
+        tr.innerHTML = `
+            <td>
+                <input type="checkbox"
+                    ${completed.includes(obj.id) ? "checked" : ""}
+                    onchange="toggleCompleted('${obj.id}')"
+                />
+            </td>
+            <td>${obj.title}</td>
+            <td>${obj.description}</td>
+            <td>${obj.sp}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+/** Główna funkcja ładowania */
+async function loadObjectives() {
+    const url = "https://fut.gg/objectives";
+    const proxy = "https://corsproxy.io/?";  // Proxy DO CORS
+    const res = await fetch(proxy + encodeURIComponent(url));
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const list = [];
+    const items = doc.querySelectorAll("div.grid > div.bg-gray-600 > *");
+
+    items.forEach(el => {
+        const text = (el.textContent || "").trim();
+        // console.log("Text:", text);
+        // Szukamy SP lub „Season Points” w tekście
+        const match = text.match(/(\d+)\s*(?:SP|Season Points|total)/i);
+        if (match) {
+            let sp = match[1];
+            console.log("Matched SP:", sp);
+            
+            sp = text.toLowerCase().replace("total", "").trim();
+            if(sp.includes(','))
+                sp = sp.replace(',','');
+            sp = sp.substring(sp.lastIndexOf("sp")+2).trim();
+            const title = text.replace(/\s*\d+\s*(?:SP|Season Points)/i, "").trim();
+            const description = "";
+
+            list.push({ id: title + sp, title, description, sp });
+        }
+    });
+
+    // Unikalne
+    const unique = Array.from(new Map(list.map(o => [o.id, o])).values());
+
+    window.objectives = unique;
+    render(unique);
+}
+</script>
+
+</body>
+</html>
